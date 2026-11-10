@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `EXPECTED_IBANS` env var for IBAN-only, alert-only deployments without a
+  baseline file
+- Explicit `environment:` mapping in `docker-compose.yml` so Portainer stack
+  environment variables reach the container
+- `CONFIG_DIR` compose variable for the baseline directory
+- README sections for IBAN-only mode and Portainer
+
+### Fixed
+
+- Auto-restore no longer drops extra account fields such as `country_code`
+
+
 ## [0.1.0] - 2026-11-10
 
 ### Added

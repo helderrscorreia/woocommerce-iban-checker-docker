@@ -72,6 +72,16 @@ function load_config(): array
 
     $interval = max(5, (int) env_value('CHECK_INTERVAL', '60'));
 
+    $autoRestore = bool_env('AUTO_RESTORE');
+    $expectedIbans = null;
+    $rawIbans = env_value('EXPECTED_IBANS');
+    if ($rawIbans !== null) {
+        $expectedIbans = parse_expected_ibans($rawIbans);
+        if ($autoRestore) {
+            throw new RuntimeException('AUTO_RESTORE must be false when EXPECTED_IBANS is used');
+        }
+    }
+
     return [
         'db' => [
             'host' => $required('DB_HOST'),
@@ -83,11 +93,12 @@ function load_config(): array
         'table_prefix' => $prefix,
         'option' => $option,
         'site' => (string) env_value('SITE_NAME', gethostname() ?: 'woocommerce'),
+        'expected_ibans' => $expectedIbans,
         'baseline_file' => (string) env_value('BASELINE_FILE', '/config/expected-accounts.json'),
         'state_file' => (string) env_value('STATE_FILE', '/data/state.json'),
         'heartbeat_file' => (string) env_value('HEARTBEAT_FILE', '/tmp/watchdog.heartbeat'),
         'interval' => $interval,
-        'auto_restore' => bool_env('AUTO_RESTORE'),
+        'auto_restore' => $autoRestore,
         'webhook' => $webhook,
         'full_iban' => bool_env('ALERT_FULL_IBAN'),
         'remind_minutes' => max(0, (int) env_value('ALERT_REMIND_MINUTES', '60')),
@@ -113,6 +124,12 @@ function canonical_account(array $row): array
     foreach (ACCOUNT_FIELDS as $field) {
         $account[$field] = (string) ($row[$field] ?? '');
     }
+    // Preserve extra fields such as country_code instead of dropping them on restore.
+    foreach ($row as $field => $value) {
+        if (!array_key_exists($field, $account)) {
+            $account[$field] = $value;
+        }
+    }
     return $account;
 }
 
@@ -133,6 +150,31 @@ function iban_valid(string $iban): bool
     }
 
     return $remainder === 1;
+}
+
+/**
+ * Parses EXPECTED_IBANS (comma-separated, order matters) into normalized,
+ * checksum-validated IBANs. Spaces and case are ignored.
+ */
+function parse_expected_ibans(string $raw): array
+{
+    $ibans = [];
+    foreach (explode(',', $raw) as $entry) {
+        $iban = (string) preg_replace('/\s+/', '', strtoupper($entry));
+        if ($iban === '') {
+            continue;
+        }
+        if (!iban_valid($iban)) {
+            throw new RuntimeException("EXPECTED_IBANS contains an invalid IBAN: $iban");
+        }
+        $ibans[] = $iban;
+    }
+
+    if ($ibans === []) {
+        throw new RuntimeException('EXPECTED_IBANS must contain at least one IBAN');
+    }
+
+    return $ibans;
 }
 
 /**
@@ -229,6 +271,42 @@ function compare_accounts(array $baseline, array $actual): array
                     'actual' => $found[$index][$field],
                 ];
             }
+        }
+    }
+
+    return $findings;
+}
+
+/**
+ * IBAN-only comparison for EXPECTED_IBANS mode. Ignores labels, BIC, account
+ * number, sort code and country code; order and account count still matter.
+ */
+function compare_ibans(array $expectedIbans, array $actual): array
+{
+    $found = array_map(
+        static fn (array $row): string => normalize_account($row)['iban'],
+        $actual
+    );
+    $findings = [];
+
+    if (count($expectedIbans) !== count($found)) {
+        $findings[] = [
+            'type' => 'count',
+            'expected' => count($expectedIbans),
+            'actual' => count($found),
+        ];
+    }
+
+    $limit = min(count($expectedIbans), count($found));
+    for ($index = 0; $index < $limit; $index++) {
+        if ($expectedIbans[$index] !== $found[$index]) {
+            $findings[] = [
+                'type' => 'field',
+                'index' => $index,
+                'field' => 'iban',
+                'expected' => $expectedIbans[$index],
+                'actual' => $found[$index],
+            ];
         }
     }
 

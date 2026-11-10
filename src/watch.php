@@ -13,6 +13,8 @@ function run_watchdog(array $config): never
     log_line('info', 'watchdog starting', [
         'site' => $config['site'],
         'option' => $config['option'],
+        'mode' => $config['expected_ibans'] === null ? 'baseline_file' : 'expected_ibans',
+        'expected_accounts' => $config['expected_ibans'] === null ? null : count($config['expected_ibans']),
         'interval_seconds' => $config['interval'],
         'auto_restore' => $config['auto_restore'],
         'webhook' => $config['webhook'] !== '',
@@ -20,7 +22,9 @@ function run_watchdog(array $config): never
     ]);
 
     // Fail fast on a broken baseline: never run blind.
-    load_baseline($config['baseline_file']);
+    if ($config['expected_ibans'] === null) {
+        load_baseline($config['baseline_file']);
+    }
 
     $state = load_state($config['state_file']);
     $pdo = null;
@@ -30,7 +34,9 @@ function run_watchdog(array $config): never
         $started = microtime(true);
         try {
             // Re-read each cycle so baseline edits apply without a restart.
-            $baseline = load_baseline($config['baseline_file']);
+            $baseline = $config['expected_ibans'] === null
+                ? load_baseline($config['baseline_file'])
+                : null;
             $pdo ??= connect_db($config['db']);
             $raw = fetch_option($pdo, $config['table_prefix'], $config['option']);
 
@@ -41,13 +47,16 @@ function run_watchdog(array $config): never
                 $findings = [['type' => 'missing_option']];
             } else {
                 try {
-                    $findings = compare_accounts($baseline, parse_option_value($raw));
+                    $actual = parse_option_value($raw);
+                    $findings = $config['expected_ibans'] === null
+                        ? compare_accounts($baseline, $actual)
+                        : compare_ibans($config['expected_ibans'], $actual);
                 } catch (Throwable $error) {
                     $findings = [['type' => 'unreadable_option', 'error' => $error->getMessage()]];
                 }
             }
 
-            if ($findings !== [] && $config['auto_restore']) {
+            if ($findings !== [] && $config['auto_restore'] && $baseline !== null) {
                 try {
                     restore_option(
                         $pdo,

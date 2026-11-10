@@ -54,6 +54,11 @@ $roundTrip = parse_option_value(serialize_accounts($fixture));
 check($roundTrip === $fixture, 'serialize/parse round-trip preserves account rows');
 check(serialize_accounts($fixture) === serialize($fixture), 'serialized format matches native PHP serialize');
 
+$withCountry = $fixture;
+$withCountry[0]['country_code'] = 'PT';
+$restored = parse_option_value(serialize_accounts($withCountry));
+check(($restored[0]['country_code'] ?? null) === 'PT', 'extra fields such as country_code survive restore');
+
 // Comparison
 $same = $fixture;
 $same[0]['account_name'] = 'Renamed Shop';
@@ -101,6 +106,46 @@ try {
 } catch (RuntimeException) {
     check(true, 'empty baseline is rejected');
 }
+
+// EXPECTED_IBANS mode
+$expectedIbans = parse_expected_ibans(' pt50 0002 0123 1234 5678 9015 4 , DE89370400440532013000 ');
+check($expectedIbans === ['PT50000201231234567890154', 'DE89370400440532013000'], 'EXPECTED_IBANS parses, normalizes and keeps order');
+check(parse_expected_ibans('PT50 0002 0123 1234 5678 9015 4,,') === ['PT50000201231234567890154'], 'empty EXPECTED_IBANS entries are ignored');
+
+try {
+    parse_expected_ibans('PT50000201231234567890155');
+    check(false, 'EXPECTED_IBANS with invalid checksum is rejected');
+} catch (RuntimeException) {
+    check(true, 'EXPECTED_IBANS with invalid checksum is rejected');
+}
+
+try {
+    parse_expected_ibans(' , ');
+    check(false, 'empty EXPECTED_IBANS is rejected');
+} catch (RuntimeException) {
+    check(true, 'empty EXPECTED_IBANS is rejected');
+}
+
+$ptAccount = [[
+    'account_name' => 'Parábola do Lápis, LDA',
+    'account_number' => '',
+    'sort_code' => '',
+    'bank_name' => 'MONTEPIO',
+    'iban' => 'PT50 0002 0123 1234 5678 9015 4',
+    'bic' => '',
+    'country_code' => 'PT',
+]];
+check(compare_ibans(['PT50000201231234567890154'], $ptAccount) === [], 'matching IBANs do not alert');
+$ptTampered = $ptAccount;
+$ptTampered[0]['iban'] = 'GB82WEST12345698765432';
+$findings = compare_ibans(['PT50000201231234567890154'], $ptTampered);
+check(count($findings) === 1 && $findings[0]['field'] === 'iban', 'changed IBAN alerts in IBAN-only mode');
+$findings = compare_ibans(['PT50000201231234567890154'], []);
+check(count($findings) === 1 && $findings[0]['type'] === 'count', 'removed account alerts in IBAN-only mode');
+$ptLabelChanged = $ptAccount;
+$ptLabelChanged[0]['account_name'] = 'Other Name';
+$ptLabelChanged[0]['bic'] = 'BCOMPTPL';
+check(compare_ibans(['PT50000201231234567890154'], $ptLabelChanged) === [], 'IBAN-only mode ignores labels and BIC');
 
 // Malformed option values
 foreach (['', 'b:0;', 's:3:"abc";', 'garbage'] as $bad) {

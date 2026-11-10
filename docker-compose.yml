@@ -3,10 +3,35 @@ services:
     build: .
     container_name: woocommerce-iban-watchdog
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      DB_HOST: "${DB_HOST:-}"
+      DB_PORT: "${DB_PORT:-3306}"
+      DB_NAME: "${DB_NAME:-}"
+      DB_USER: "${DB_USER:-}"
+      DB_PASSWORD: "${DB_PASSWORD:-}"
+      DB_TABLE_PREFIX: "${DB_TABLE_PREFIX:-wp_}"
+      SITE_NAME: "${SITE_NAME:-}"
+      EXPECTED_IBANS: "${EXPECTED_IBANS:-}"
+      WATCH_OPTION: "${WATCH_OPTION:-woocommerce_bacs_accounts}"
+      BASELINE_FILE: "${BASELINE_FILE:-/config/expected-accounts.json}"
+      CHECK_INTERVAL: "${CHECK_INTERVAL:-60}"
+      AUTO_RESTORE: "${AUTO_RESTORE:-false}"
+      WEBHOOK_URL: "${WEBHOOK_URL:-}"
+      ALERT_FULL_IBAN: "${ALERT_FULL_IBAN:-false}"
+      ALERT_REMIND_MINUTES: "${ALERT_REMIND_MINUTES:-60}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_ENCRYPTION: "${SMTP_ENCRYPTION:-starttls}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      ALERT_EMAIL_TO: "${ALERT_EMAIL_TO:-}"
+      STATE_FILE: "${STATE_FILE:-/data/state.json}"
+      HEARTBEAT_FILE: "${HEARTBEAT_FILE:-/tmp/watchdog.heartbeat}"
     volumes:
-      - ./config/expected-accounts.json:/config/expected-accounts.json:ro
+      # Only needed for file-based baselines; set CONFIG_DIR on Portainer if
+      # you place the file somewhere else on the Docker host.
+      - "${CONFIG_DIR:-./config}:/config:ro"
       - watchdog-state:/data
     security_opt:
       - no-new-privileges:true

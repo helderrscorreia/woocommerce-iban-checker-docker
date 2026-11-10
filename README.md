@@ -65,6 +65,45 @@ Set at least one. With none configured, findings only appear in `docker logs`.
 Bank details are masked to the last four characters by default. Set
 `ALERT_FULL_IBAN=true` only if your alert destination is trusted.
 
+## IBAN-only mode
+
+If you only need to watch the account IBAN(s), skip the JSON baseline:
+
+```env
+EXPECTED_IBANS=PT50000201231234567890154
+AUTO_RESTORE=false
+```
+
+- Comma-separate multiple IBANs, in the same order as the WooCommerce accounts
+- Spaces and lowercase are accepted and normalized
+- Only IBANs are compared; labels, BIC, account number, sort code and
+  `country_code` are ignored
+- Account count and order still matter
+- Takes precedence over `BASELINE_FILE`
+- `AUTO_RESTORE` must remain `false`; the watchdog refuses to start if both are
+  set
+
+Use the file baseline instead when you also want BIC/account-number/sort-code
+checks or automatic recovery.
+
+## Portainer
+
+Deploy as a stack from this Git repository (Compose path `docker-compose.yml`)
+and set the configuration in Portainer's environment-variable UI. Every option
+from `.env.example` is mapped through `environment:` in the compose file, so no
+`.env` file is required in the checkout.
+
+- For IBAN-only mode, set `EXPECTED_IBANS` and leave `AUTO_RESTORE=false`.
+- For file mode, place `expected-accounts.json` on the Docker host and set
+  `CONFIG_DIR` to its directory (defaults to `./config`).
+- A private Git repository needs its own Portainer credential or deploy key.
+- Portainer on Docker Standalone can build the image from the checkout. On
+  Swarm, `build` is unsupported; publish or pre-build the image and change
+  `build: .` to an `image:` reference.
+- Portainer environment variables are stored in Portainer's database and are
+  visible to its administrators, just like a `.env` file.
+
+
 ## Database permissions
 
 Use a dedicated user, not the WordPress admin user.
@@ -83,10 +122,12 @@ Docker host, uncomment `extra_hosts` in `docker-compose.yml` and set
 
 ## Auto-restore
 
-With `AUTO_RESTORE=true` the watchdog rewrites the full baseline row (including
-labels) after any mismatch — changed fields, added/removed accounts, a deleted
-option row, or an unparsable option value — and re-reads the option to verify.
-The alert says whether the restore succeeded.
+Auto-restore is available in file-baseline mode only (not with
+`EXPECTED_IBANS`). With `AUTO_RESTORE=true` the watchdog rewrites the full
+baseline row (including labels) after any mismatch — changed fields,
+added/removed accounts, a deleted option row, or an unparsable option value —
+and re-reads the option to verify. The alert says whether the restore
+succeeded.
 
 - Legitimate account changes must be made in the baseline file first.
 - The baseline is re-read every cycle, so edits apply without a restart.
