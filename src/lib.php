@@ -408,6 +408,54 @@ function save_state(string $path, array $state): void
     }
 }
 
+function is_discord_webhook(string $url): bool
+{
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    return $host === 'discord.com' || $host === 'discordapp.com'
+        || str_ends_with($host, '.discord.com') || str_ends_with($host, '.discordapp.com');
+}
+
+/**
+ * Discord renders a generic JSON payload as raw text, so send a rich embed.
+ */
+function discord_payload(array $payload): array
+{
+    [$color, $emoji, $title] = [
+        'tampered' => [0xE01F1F, '🚨', 'Bank details changed'],
+        'recovered' => [0x1F9D55, '✅', 'Bank details recovered'],
+        'error' => [0xE0A800, '⚠️', 'Watchdog check failing'],
+    ][$payload['status']] ?? [0x6B7280, 'ℹ️', ucfirst((string) $payload['status'])];
+
+    $embed = [
+        'title' => "$emoji $title",
+        'description' => substr((string) $payload['text'], 0, 4096),
+        'color' => $color,
+        'fields' => [
+            ['name' => 'Site', 'value' => (string) $payload['site'], 'inline' => true],
+            ['name' => 'Detected', 'value' => (string) $payload['detected_at'], 'inline' => true],
+        ],
+        'footer' => ['text' => 'woocommerce-iban-watchdog'],
+        'timestamp' => $payload['detected_at'],
+    ];
+
+    $details = substr(implode("\n", array_map(
+        static fn ($line): string => '• ' . $line,
+        $payload['findings']
+    )), 0, 1024);
+    if ($details !== '') {
+        $embed['fields'][] = ['name' => 'Details', 'value' => $details, 'inline' => false];
+    }
+    if (($payload['restored'] ?? false) === true) {
+        $embed['fields'][] = ['name' => 'Auto-restore', 'value' => 'Trusted baseline written back', 'inline' => false];
+    }
+
+    return [
+        'username' => 'IBAN Watchdog',
+        'allowed_mentions' => ['parse' => []], // never ping @everyone from a webhook
+        'embeds' => [$embed],
+    ];
+}
+
 function http_post_json(string $url, array $payload): void
 {
     $context = stream_context_create([
@@ -496,7 +544,10 @@ function notify(array $config, string $kind, string $text, array $findings, arra
     if ($config['webhook'] !== '') {
         $configured++;
         try {
-            http_post_json($config['webhook'], $payload);
+            http_post_json(
+                $config['webhook'],
+                is_discord_webhook($config['webhook']) ? discord_payload($payload) : $payload
+            );
             $delivered++;
             log_line('info', 'webhook alert sent', ['kind' => $kind]);
         } catch (Throwable $error) {

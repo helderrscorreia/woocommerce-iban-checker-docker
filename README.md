@@ -102,7 +102,7 @@ Set **at least one**. With none configured, findings only appear in `docker logs
 
 | Channel | Variables | Notes |
 | --- | --- | --- |
-| **Webhook** | `WEBHOOK_URL` | Generic JSON POST — Slack, Discord, ntfy, Gotify or a custom endpoint |
+| **Webhook** | `WEBHOOK_URL` | Generic JSON POST — Slack, ntfy, Gotify or a custom endpoint. Discord webhook URLs automatically receive a formatted embed |
 | **Email** | `SMTP_HOST`, `SMTP_PORT`, `SMTP_ENCRYPTION`, `SMTP_FROM`, `ALERT_EMAIL_TO`, `SMTP_USER`, `SMTP_PASSWORD` | The entrypoint writes `/etc/msmtprc`; PHP calls `msmtp -t` |
 
 ### Webhook payload

@@ -163,4 +163,24 @@ check(str_contains($lines[0], '****5432') && !str_contains($lines[0], 'GB82WEST1
 $lines = describe_findings(compare_accounts($fixture, $changed), true);
 check(str_contains($lines[0], 'GB82WEST12345698765432'), 'findings can include full values when enabled');
 
+// Discord webhooks get an embed; other endpoints keep the generic JSON payload
+$alert = [
+    'service' => 'woocommerce-iban-watchdog',
+    'status' => 'tampered',
+    'site' => 'shop.example',
+    'text' => 'Offline bank-transfer details changed on shop.example',
+    'detected_at' => '2026-01-01T00:00:00+00:00',
+    'restored' => true,
+    'findings' => ['account #1 iban changed: expected ****3000, actual ****5432'],
+];
+$discord = discord_payload($alert);
+check(count($discord['embeds']) === 1 && $discord['embeds'][0]['color'] === 0xE01F1F, 'Discord tamper alert uses the red embed');
+check(str_contains($discord['embeds'][0]['fields'][2]['value'], '• account #1 iban changed'), 'Discord embed renders findings as bullet lines');
+check($discord['embeds'][0]['fields'][3]['name'] === 'Auto-restore', 'Discord embed mentions auto-restore');
+check($discord['allowed_mentions'] === ['parse' => []], 'Discord payload never mentions roles or everyone');
+check(discord_payload(['status' => 'recovered'] + $alert)['embeds'][0]['color'] === 0x1F9D55, 'Discord recovery alert uses the green embed');
+check(is_discord_webhook('https://discord.com/api/webhooks/1/token'), 'Discord webhook URL is detected');
+check(is_discord_webhook('https://ptb.discord.com/api/webhooks/1/token'), 'Discord subdomain URL is detected');
+check(!is_discord_webhook('https://hooks.slack.com/services/x'), 'non-Discord webhook keeps the generic payload');
+
 exit($failed === 0 ? 0 : 1);
