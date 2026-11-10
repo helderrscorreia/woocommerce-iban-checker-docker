@@ -1,0 +1,21 @@
+services:
+  iban-watchdog:
+    build: .
+    container_name: woocommerce-iban-watchdog
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./config/expected-accounts.json:/config/expected-accounts.json:ro
+      - watchdog-state:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # If MySQL only listens on the Docker host (local server or SSH tunnel),
+    # uncomment this and set DB_HOST=host.docker.internal in .env:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+
+volumes:
+  watchdog-state:

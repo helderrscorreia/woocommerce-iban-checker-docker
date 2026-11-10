@@ -1,0 +1,10 @@
+[
+  {
+    "account_name": "Example Shop Ltd",
+    "account_number": "12345678",
+    "sort_code": "12-34-56",
+    "bank_name": "Example Bank",
+    "iban": "GB82WEST12345698765432",
+    "bic": "WESTGB2L"
+  }
+]

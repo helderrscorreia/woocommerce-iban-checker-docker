@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t iban-watchdog .
+
+      - name: PHP lint
+        run: |
+          docker run --rm --entrypoint sh iban-watchdog -c '
+            for file in /app/src/*.php /app/tests/*.php; do
+              php -l "$file" || exit 1
+            done
+          '
+
+      - name: Self-checks
+        run: docker run --rm --entrypoint php iban-watchdog /app/tests/selfcheck.php
+
+      - name: Entrypoint syntax
+        run: docker run --rm --entrypoint sh iban-watchdog -c 'sh -n /usr/local/bin/docker-entrypoint.sh'
+
+      - name: Compose config
+        run: |
+          cp .env.example .env
+          cp config/expected-accounts.example.json config/expected-accounts.json
+          docker compose config > /dev/null

@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a focused improvement to detection, alerting, or operations
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project intentionally stays small and single-purpose. Explain the
+        security or operational problem before proposing code.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What threat, failure mode, or operational gap does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The smallest change that solves the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing config, external tooling, or why not doing this is acceptable.
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks
+      description: Database writes, false positives, secret handling, or added dependencies.
