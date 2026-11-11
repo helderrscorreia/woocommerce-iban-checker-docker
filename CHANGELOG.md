@@ -4,10 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-11-11
 
 ### Added
 
+- Scan BACS gateway description/instructions for untrusted IBANs
+  (`WATCH_SETTINGS_OPTION`)
+- `HEARTBEAT_URL` dead-man's switch ping after every successful check
+- Optional MySQL TLS via `DB_SSL_CA` / `DB_SSL_VERIFY`
 - `EXPECTED_IBANS` env var for IBAN-only, alert-only deployments without a
   baseline file
 - Explicit `environment:` mapping in `docker-compose.yml` so Portainer stack

@@ -168,6 +168,10 @@ All options live in `.env` (see [`.env.example`](.env.example)).
 | `DB_TABLE_PREFIX` | `wp_` | WordPress `$table_prefix` |
 | `SITE_NAME` | hostname | Friendly name in alerts |
 | `WATCH_OPTION` | `woocommerce_bacs_accounts` | `wp_options` row to watch |
+| `WATCH_SETTINGS_OPTION` | `woocommerce_bacs_settings` | Gateway settings whose description/instructions are scanned for untrusted IBANs (`none` = off) |
+| `DB_SSL_CA` | — | CA certificate path; enables TLS to MySQL |
+| `DB_SSL_VERIFY` | `true` | Verify the MySQL server certificate |
+| `HEARTBEAT_URL` | — | Pinged after every successful check (dead-man's switch) |
 | `EXPECTED_IBANS` | — | IBAN-only mode (comma-separated) |
 | `BASELINE_FILE` | `/config/expected-accounts.json` | JSON baseline path (file mode) |
 | `CONFIG_DIR` | `./config` | Host directory bind-mounted to `/config` |
@@ -276,6 +280,9 @@ docker run --rm --entrypoint php woocommerce-iban-watchdog /app/tests/selfcheck.
 - **BACS only** — custom gateways that store bank details elsewhere are not
   checked. Point `WATCH_OPTION` at their option only if the value has the same
   row structure.
+- **Instructions text is alert-only** — an untrusted IBAN in the gateway
+  description/instructions is reported but never rewritten. A legitimate IBAN
+  mentioned there must be in the trusted list to avoid alerts.
 - **Ordering matters** — reordering accounts in WooCommerce triggers an alert
   (the baseline is index-based).
 - **Direct DB writes bypass WordPress caches** — see the auto-restore note.
@@ -301,5 +308,11 @@ Never open a public issue containing real bank details or credentials.
 ---
 
 <div align="center">
+
+Made with ❤️ in Portugal 🇵🇹 by **[Goldylocks](https://www.goldylocks.pt)**
+
+[![Goldylocks](https://img.shields.io/badge/Goldylocks-goldylocks.pt-D4AF37?style=for-the-badge)](https://www.goldylocks.pt)
+
 <sub>Made for shops that would rather not learn about skimming from a customer.</sub>
+
 </div>

@@ -183,4 +183,12 @@ check(is_discord_webhook('https://discord.com/api/webhooks/1/token'), 'Discord w
 check(is_discord_webhook('https://ptb.discord.com/api/webhooks/1/token'), 'Discord subdomain URL is detected');
 check(!is_discord_webhook('https://hooks.slack.com/services/x'), 'non-Discord webhook keeps the generic payload');
 
+// IBANs in gateway instructions text
+check(find_ibans_in_text('Pay to DE89 3704 0044 0532 0130 00 please') === ['DE89370400440532013000'], 'spaced IBAN found in text');
+check(find_ibans_in_text('ref DE89370400440532013001') === [], 'bad-checksum IBAN in text is ignored');
+$settings = serialize(['description' => 'Pay by transfer', 'instructions' => 'IBAN: GB82 WEST 1234 5698 7654 32']);
+check(check_settings_text($settings, ['GB82WEST12345698765432']) === [], 'trusted IBAN in instructions passes');
+check(check_settings_text($settings, ['DE89370400440532013000'])[0]['type'] === 'foreign_iban_in_text', 'untrusted IBAN in instructions is flagged');
+check(check_settings_text('garbage', [])[0]['type'] === 'unreadable_option', 'unparseable gateway settings are flagged');
+
 exit($failed === 0 ? 0 : 1);

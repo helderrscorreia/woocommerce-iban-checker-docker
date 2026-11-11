@@ -43,6 +43,23 @@ function load_config(): array
         throw new RuntimeException('WATCH_OPTION may only contain letters, digits and underscores');
     }
 
+    $settingsOption = (string) env_value('WATCH_SETTINGS_OPTION', 'woocommerce_bacs_settings');
+    if (strtolower($settingsOption) === 'none') {
+        $settingsOption = '';
+    } elseif (!preg_match('/^[A-Za-z0-9_]+$/', $settingsOption)) {
+        throw new RuntimeException('WATCH_SETTINGS_OPTION may only contain letters, digits and underscores');
+    }
+
+    $heartbeatUrl = (string) env_value('HEARTBEAT_URL', '');
+    if ($heartbeatUrl !== '' && !filter_var($heartbeatUrl, FILTER_VALIDATE_URL)) {
+        throw new RuntimeException('HEARTBEAT_URL is not a valid URL');
+    }
+
+    $sslCa = env_value('DB_SSL_CA');
+    if ($sslCa !== null && !is_readable($sslCa)) {
+        throw new RuntimeException("DB_SSL_CA is not readable: $sslCa");
+    }
+
     $webhook = (string) env_value('WEBHOOK_URL', '');
     if ($webhook !== '' && !filter_var($webhook, FILTER_VALIDATE_URL)) {
         throw new RuntimeException('WEBHOOK_URL is not a valid URL');
@@ -89,7 +106,11 @@ function load_config(): array
             'name' => $required('DB_NAME'),
             'user' => $required('DB_USER'),
             'password' => (string) env_value('DB_PASSWORD', ''),
+            'ssl_ca' => $sslCa,
+            'ssl_verify' => bool_env('DB_SSL_VERIFY', true),
         ],
+        'settings_option' => $settingsOption,
+        'heartbeat_url' => $heartbeatUrl,
         'table_prefix' => $prefix,
         'option' => $option,
         'site' => (string) env_value('SITE_NAME', gethostname() ?: 'woocommerce'),
@@ -313,6 +334,47 @@ function compare_ibans(array $expectedIbans, array $actual): array
     return $findings;
 }
 
+/**
+ * Finds checksum-valid IBANs in free text (printed as one block or in groups of four).
+ */
+function find_ibans_in_text(string $text): array
+{
+    preg_match_all('/\b[A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b/', strtoupper($text), $matches);
+    $ibans = [];
+    foreach ($matches[0] as $match) {
+        $iban = str_replace(' ', '', $match);
+        if (iban_valid($iban)) {
+            $ibans[$iban] = true;
+        }
+    }
+    return array_keys($ibans);
+}
+
+/**
+ * Flags IBANs in the BACS gateway description/instructions that are not trusted.
+ */
+function check_settings_text(string $raw, array $trustedIbans): array
+{
+    $settings = @unserialize($raw, ['allowed_classes' => false, 'max_depth' => PHP_OPTION_LIMIT]);
+    if (!is_array($settings)) {
+        return [['type' => 'unreadable_option', 'error' => 'gateway settings are not a PHP array']];
+    }
+    $text = (string) ($settings['description'] ?? '') . "\n" . (string) ($settings['instructions'] ?? '');
+    $findings = [];
+    foreach (array_diff(find_ibans_in_text($text), $trustedIbans) as $iban) {
+        $findings[] = ['type' => 'foreign_iban_in_text', 'actual' => $iban];
+    }
+    return $findings;
+}
+
+function ping_heartbeat(string $url): void
+{
+    $context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
+    if (@file_get_contents($url, false, $context) === false) {
+        log_line('warning', 'heartbeat ping failed');
+    }
+}
+
 function mask_bank_value(string $value, bool $full): string
 {
     if ($value === '') {
@@ -340,6 +402,9 @@ function describe_findings(array $findings, bool $full): array
             case 'unreadable_option':
                 $lines[] = 'payment account option cannot be parsed: ' . $finding['error'];
                 break;
+            case 'foreign_iban_in_text':
+                $lines[] = 'untrusted IBAN in payment instructions text: ' . mask_bank_value($finding['actual'], $full);
+                break;
             case 'restore_failed':
                 $lines[] = 'restore failed: ' . $finding['error'];
                 break;
@@ -359,11 +424,17 @@ function connect_db(array $db): PDO
         $db['name']
     );
 
-    return new PDO($dsn, $db['user'], $db['password'], [
+    $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_TIMEOUT => 5,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+    if (($db['ssl_ca'] ?? null) !== null) {
+        $options[PDO::MYSQL_ATTR_SSL_CA] = $db['ssl_ca'];
+        $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = $db['ssl_verify'];
+    }
+
+    return new PDO($dsn, $db['user'], $db['password'], $options);
 }
 
 function fetch_option(PDO $pdo, string $prefix, string $option): ?string

@@ -79,6 +79,17 @@ function run_watchdog(array $config): never
                 }
             }
 
+            if ($config['settings_option'] !== '') {
+                $settingsRaw = fetch_option($pdo, $config['table_prefix'], $config['settings_option']);
+                if ($settingsRaw !== null) {
+                    $trusted = $config['expected_ibans'] ?? array_map(
+                        static fn (array $row): string => normalize_account($row)['iban'],
+                        $baseline
+                    );
+                    $findings = array_merge($findings, check_settings_text($settingsRaw, $trusted));
+                }
+            }
+
             $failures = 0;
             if ($findings !== []) {
                 handle_tamper($config, $state, $findings, $restored);
@@ -87,6 +98,9 @@ function run_watchdog(array $config): never
             }
 
             @file_put_contents($config['heartbeat_file'], timestamp());
+            if ($config['heartbeat_url'] !== '') {
+                ping_heartbeat($config['heartbeat_url']);
+            }
         } catch (Throwable $error) {
             $pdo = null;
             $failures++;
